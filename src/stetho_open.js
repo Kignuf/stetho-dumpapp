@@ -1,8 +1,11 @@
-// const net = require('net')
-const netlinkwrapper = require('netlinkwrapper')
+const net = require('net')
+const util = require('util')
+const nextTick = util.promisify(process.nextTick)
+// const netlinkwrapper = require('netlinkwrapper')
 // const {once} = require('events')
 const padLeft = require('pad-left')
 
+const READ_TIMEOUT = 10 * 1000
 // ###############################################################################
 // ##
 // ## Simple utility class to create a forwarded socket connection to an
@@ -33,28 +36,11 @@ async function stetho_open(device, stetho_process){
 	try {
 		await adb.select_service(`localabstract:${socket_name}`)
 	} catch(e) {
+		console.error(e)
 		throw new Error(`Failure to target process ${stetho_process}: ${e.message} (is it running ?)`)
 	}
 
-	return adb.sock
-}
-
-// TODO: réfléchir à réimplementer version maison
-function read_input(sock, n, tag) {
-	let data = ''
-	// console.log(`Read input: expecting ${n} data`)
-	while(data.length < n) {
-		const incoming_data = sock.read(n - data.length, true) // TODO: à modifier quand on vire sync socket
-		console.log(`got newData: ${incoming_data} - ${incoming_data.length}`)
-		if(incoming_data.length === 0) {
-			break;
-		}
-		data += incoming_data
-	}
-	if(data.length !== n){
-		throw new Error(`Unexpected end of stream while reading ${tag}.`)
-	}
-	return data
+	return adb
 }
 
 async function _find_only_stetho_socket(device) {
@@ -93,7 +79,7 @@ async function _find_only_stetho_socket(device) {
 	} catch(e) {
 		throw e
 	} finally {
-		// adb.sock.close() // TODO: check this
+		adb.close()
 	}
 }
 
@@ -134,14 +120,46 @@ class AdbSmartSocketClient {
 		this.sock = null
 	}
 
-	async connect(port = 5037) {
-		console.log('connect1')
-		this.sock = new netlinkwrapper()
-		console.log('connect2')
-		this.sock.connect(port, '127.0.0.1')
-		console.log('connect3')
-		this.sock.blocking(true)
-		// this.sock = net.connect(port, '127.0.0.1')
+	async connect(port = 5037, host = 'localhost') {
+		this.sock = net.connect(port, host)
+
+		this.receivedData = Buffer.alloc(0)
+		this.sock.on('data', (data) => {
+			if (Buffer.isBuffer(data)) {
+				this.receivedData = Buffer.concat([this.receivedData, data])
+			} else if (typeof data === 'string') {
+				this.receivedData = Buffer.concat([this.receivedData, Buffer.from(data)])
+			}
+		})
+	}
+
+	async write(data) {
+		return new Promise(resolve => {
+			this.sock.write(data, resolve)
+		})
+	}
+
+	async read_input(n, tag) {
+		return new Promise(async (resolve, reject) => {
+			const start = new Date()
+			// check each tick until we have received enough data
+			while (this.receivedData.length < n) {
+				const elapsed = new Date() - start
+				if (elapsed >= READ_TIMEOUT) {
+					reject(new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`))
+				}
+				await nextTick()
+			}
+
+			// remove the asked length from our buffer and return it
+			const consumed = this.receivedData.slice(0, n)
+			this.receivedData = this.receivedData.slice(n)
+			resolve(consumed)
+		})
+	}
+
+	close(){
+		this.sock.end()
 	}
 
 	async select_service(service) {
@@ -162,18 +180,21 @@ class AdbSmartSocketClient {
 		// 	throw new Error(`Unrecognized status=${status}`)
 		// }
 
+		console.log('select_service:', service)
+		console.log('select_service:', service.length)
 		const message = `${padLeft(service.length.toString(16), 4, '0')}${service}` // TODO: check this is correct
-		console.log('toto')
-		this.sock.write(Buffer.from(message, 'ascii').toString('ascii')) // TODO: chelou
+		await this.write(Buffer.from(message, 'ascii').toString('ascii')) // TODO: chelou
+		console.log('hop')
 
-		const status = await read_input(this.sock, 4, 'status')
+		const status = await this.read_input(4, 'status')
+		console.log('status:', status)
 
 		if (status === 'OKAY') { // TODO: pas sur (en py c'est b'OKAY')
 			// All good
 			return
 		} else if (status === 'FAIL') { // TODO: pas sur (en py c'est b'FAIL')
-			const reason_len = parseInt(await read_input(this.sock, 4, 'fail reason'), 16)
-			const reason = (await read_input(this.sock, reason_len, 'fail reason lean')).toString('ascii') // TODO: vérifier la conversion ascii
+			const reason_len = parseInt(await this.read_input(4, 'fail reason'), 16)
+			const reason = (await this.read_input(reason_len, 'fail reason lean')).toString('ascii') // TODO: vérifier la conversion ascii
 			throw new Error(reason)
 		} else {
 			throw new Error(`Unrecognized status= ${status}`)
@@ -182,6 +203,5 @@ class AdbSmartSocketClient {
 }
 
 module.exports = {
-	read_input,
 	stetho_open
 }

@@ -5,7 +5,7 @@ const padLeft = require('pad-left')
 const {StringDecoder} = require('string_decoder')
 // const readLineP = util.promisify(readLine)
 
-const {read_input, stetho_open} = require('./stetho_open')
+const {stetho_open} = require('./stetho_open')
 
 function die(msg, code) {
 	console.error(msg)
@@ -35,7 +35,7 @@ async function main() {
 	let device = process.env['ANDROID_SERIAL']
 
 	try {
-		const sock = await stetho_open(device, stetho_process)
+		const adb = await stetho_open(device, stetho_process)
 
 		// 	Send dumpapp hello (DUMP + version=1)
 		// print(b'DUMP' + struct.pack('!L', 1))
@@ -46,7 +46,7 @@ async function main() {
 		// const msgDump = Buffer.from(['DUMP']).toString('binary') + Buffer.from([0x00, 0x00, 0x00, 0x01]).toString('binary')
 		const msgDump = Buffer.from('DUMP\x00\x00\x00\x01').toString('binary')
 		console.log('msgDump', msgDump)
-		sock.write(msgDump)
+		await adb.write(msgDump)
 		// sock.write(buildMsg('DUMP', struct.pack('!l', 1))) // check if should use "!L" instead
 
 		let enter_frame = buildMsg('!', struct.pack('!l', args.length))
@@ -67,9 +67,9 @@ async function main() {
 			// decoder.write(Buffer.from('happn'))
 		// msgDump2 = decoder.end()
 		console.log('msgDump2', msgDump2.length)
-		sock.write(msgDump2)
+		await adb.write(msgDump2)
 
-		await read_frames(sock)
+		await read_frames(adb)
 	} catch(e) {
 		die(e.message, 1)
 	}
@@ -81,21 +81,21 @@ function buildMsg(msg, size) {
 }
 
 // TODO: modifier quand on vire sync Socket
-async function read_frames(sock) {
+async function read_frames(adb) {
 	while(true) {
 		// All frames have a single character code followed by a big-endian int
-		const code = read_input(sock, 1, 'code')
-		const n = struct.unpack('!L', read_input(sock, 4, 'int4'))[0]
+		const code = await adb.read_input(1, 'code')
+		const n = struct.unpack('!L', await adb.read_input(4, 'int4'))[0]
 
 		if (code === '1') {
 			if (n > 0) {
 				console.log('1')
-				console.log(read_input(sock, n, 'stdout blob'))
+				console.log(await adb.read_input(n, 'stdout blob'))
 			}
 		} else if (code === '2') {
 			if (n > 0) {
 				console.log('2')
-				console.error(read_input(sock, n, 'stderr blob'))
+				console.error(await adb.read_input(n, 'stderr blob'))
 			}
 		} else if (code === '_') {
 			if (n > 0) {

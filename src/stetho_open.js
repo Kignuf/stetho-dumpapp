@@ -46,7 +46,7 @@ async function stetho_open(device, stetho_process){
 async function _find_only_stetho_socket(device) {
 	const adb = await _connect_to_device(device)
 	try {
-		adb.select_service('shell:cat /proc/net/unix')
+		await adb.select_service('shell:cat /proc/net/unix')
 		let last_stetho_socket_name = null
 		const process_names = []
 		adb.sock.makeFile().forEach(line => { // TODO check this
@@ -91,9 +91,9 @@ async function _connect_to_device(device) {
 
 	try {
 		if (!device) {
-			adb.select_service('host:transport-any')
+			await adb.select_service('host:transport-any')
 		} else {
-			adb.select_service(`host:transport:${device}`)
+			await adb.select_service(`host:transport:${device}`)
 		}
 
 		return adb

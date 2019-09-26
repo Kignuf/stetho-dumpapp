@@ -22,17 +22,14 @@ async function stetho_open(device, stetho_process){
 	const adb = await _connect_to_device(device)
 	let socket_name
 	if (!stetho_process) {
-		console.log('find stetho socket')
 		socket_name = await _find_only_stetho_socket(device)
 	} else {
-		console.log('format process as stetho socket')
 		socket_name = _format_process_as_stetho_socket(stetho_process)
 	}
 
 	try {
 		await adb.select_service(`localabstract:${socket_name}`)
 	} catch(e) {
-		console.error(e)
 		throw new Error(`Failure to target process ${stetho_process}: ${e.message} (is it running ?)`)
 	}
 
@@ -81,9 +78,7 @@ async function _find_only_stetho_socket(device) {
 
 async function _connect_to_device(device) {
 	const adb = new AdbSmartSocketClient()
-	console.log('before connect')
 	await adb.connect()
-	console.log('after connect')
 
 	try {
 		if (!device) {
@@ -121,24 +116,17 @@ class AdbSmartSocketClient {
 			this.sock = net.connect(port, host)
 
 			this.receivedData = Buffer.alloc(0)
-
-			this.sock.on('ready', () => {
-				console.log('Socket is READY')
-				resolve()
-			})
-			this.sock.on('error', (e) => {
-				reject(e)
-			})
-			this.sock.on('timeout', () => {
-				reject(new Error(`Timeout when connecting to ${host}:${port}`))
-			})
 			this.sock.on('data', (data) => {
-				// console.log('Received data:', data)
 				if (Buffer.isBuffer(data)) {
 					this.receivedData = Buffer.concat([this.receivedData, data])
 				} else if (typeof data === 'string') {
 					this.receivedData = Buffer.concat([this.receivedData, Buffer.from(data)])
 				}
+			})
+			this.sock.on('ready', resolve)
+			this.sock.on('error', reject)
+			this.sock.on('timeout', () => {
+				reject(new Error(`Timeout when connecting to ${host}:${port}`))
 			})
 		})
 	}
@@ -150,14 +138,13 @@ class AdbSmartSocketClient {
 	}
 
 	read_input(n, tag) {
-		console.log('read_input', tag)
 		return new Promise(async (resolve, reject) => {
 			const start = new Date()
 			// check each tick until we have received enough data
 			while (this.receivedData.length < n) {
 				const elapsed = new Date() - start
 				if (elapsed >= READ_TIMEOUT) {
-					// reject(new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`))
+					reject(new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`))
 				}
 				await next()
 			}
@@ -174,19 +161,15 @@ class AdbSmartSocketClient {
 	}
 
 	async select_service(service) {
-		console.log('select_service:', service)
-		const message = `${padLeft(service.length.toString(16), 4, '0')}${service}` // TODO: check this is correct
-		// await this.write(Buffer.from(message, 'ascii')) // TODO: chelou
+		const message = `${padLeft(service.length.toString(16), 4, '0')}${service}`
 		await this.write(message)
-		console.log('finished writting message', message)
 
 		const status = await this.read_input(4, 'status')
-		console.log('status:', status)
 
-		if (status === 'OKAY') { // TODO: pas sur (en py c'est b'OKAY')
+		if (status === 'OKAY') {
 			// All good
 			return
-		} else if (status === 'FAIL') { // TODO: pas sur (en py c'est b'FAIL')
+		} else if (status === 'FAIL') {
 			const reason_len = parseInt(await this.read_input(4, 'fail reason'), 16)
 			const reason = (await this.read_input(reason_len, 'fail reason lean')).toString('ascii') // TODO: vérifier la conversion ascii
 			throw new Error(reason)

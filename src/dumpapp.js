@@ -1,10 +1,4 @@
 const struct = require('python-struct')
-const util = require('util')
-const readLine = require('readline')
-const padLeft = require('pad-left')
-const {StringDecoder} = require('string_decoder')
-// const readLineP = util.promisify(readLine)
-
 const {stetho_open} = require('./stetho_open')
 
 function die(msg, code) {
@@ -36,20 +30,21 @@ async function main() {
 
 	try {
 		const adb = await stetho_open(device, stetho_process)
+		console.log('finished stetho_open')
 
 		// 	Send dumpapp hello (DUMP + version=1)
 		// print(b'DUMP' + struct.pack('!L', 1))
-		console.log('titi')
 		// console.log(sock)
-		// console.log('buildmsg', buildMsg('DUMP', struct.pack('!l', 1)))
+		await adb.write(buildMsg('DUMP', struct.pack('!L', 1)))
+		console.log('DUMP done')
 		// const decoder = new StringDecoder('utf8')
 		// const msgDump = Buffer.from(['DUMP']).toString('binary') + Buffer.from([0x00, 0x00, 0x00, 0x01]).toString('binary')
-		const msgDump = Buffer.from('DUMP\x00\x00\x00\x01').toString('binary')
-		console.log('msgDump', msgDump)
-		await adb.write(msgDump)
+		// const msgDump = Buffer.from('DUMP\x00\x00\x00\x01').toString('binary')
+		// console.log('msgDump', msgDump)
+		// await adb.write(msgDump)
 		// sock.write(buildMsg('DUMP', struct.pack('!l', 1))) // check if should use "!L" instead
 
-		let enter_frame = buildMsg('!', struct.pack('!l', args.length))
+		let enter_frame = buildMsg('!', struct.pack('!L', args.length))
 		args.forEach(arg => {
 			// const argAsUTF8 =
 			enter_frame += struct.pack(
@@ -58,16 +53,17 @@ async function main() {
 				arg
 			)
 		})
+		await adb.write(enter_frame)
 		console.log('tutu')
 		// console.log('enterframe: ', enter_frame)
 		// sock.write(enter_frame)
 		// sock.write('!'+padLeft('1', 4, '0') + padLeft('\x05', 2, '\x00')+'happn')
-		let msgDump2 = Buffer.from('!\x00\x00\x00\x01\x00\x05happn').toString('binary')
+		// let msgDump2 = Buffer.from('!\x00\x00\x00\x01\x00\x05happn').toString('binary')
 			// decoder.write(Buffer.from([0x00, 0x00, 0x00, 0x01, 0x00, 0x05])) +
 			// decoder.write(Buffer.from('happn'))
 		// msgDump2 = decoder.end()
-		console.log('msgDump2', msgDump2.length)
-		await adb.write(msgDump2)
+		// console.log('msgDump2', msgDump2.length)
+		// await adb.write(msgDump2)
 
 		await read_frames(adb)
 	} catch(e) {
@@ -85,7 +81,8 @@ async function read_frames(adb) {
 	while(true) {
 		// All frames have a single character code followed by a big-endian int
 		const code = await adb.read_input(1, 'code')
-		const n = struct.unpack('!L', await adb.read_input(4, 'int4'))[0]
+		const data = await adb.read_input(4, 'int4')
+		const n = struct.unpack('!L', Buffer.from(data))[0]
 
 		if (code === '1') {
 			if (n > 0) {

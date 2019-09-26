@@ -1,8 +1,5 @@
 const net = require('net')
-const util = require('util')
-const nextTick = util.promisify(process.nextTick)
-// const netlinkwrapper = require('netlinkwrapper')
-// const {once} = require('events')
+const next = () => new Promise(resolve => setImmediate(resolve))
 const padLeft = require('pad-left')
 
 const READ_TIMEOUT = 10 * 1000
@@ -22,17 +19,16 @@ const READ_TIMEOUT = 10 * 1000
 
 
 async function stetho_open(device, stetho_process){
-	console.log('before adb')
 	const adb = await _connect_to_device(device)
-	console.log('after adb')
 	let socket_name
 	if (!stetho_process) {
+		console.log('find stetho socket')
 		socket_name = await _find_only_stetho_socket(device)
 	} else {
+		console.log('format process as stetho socket')
 		socket_name = _format_process_as_stetho_socket(stetho_process)
 	}
 
-	console.log('socket_name:', socket_name)
 	try {
 		await adb.select_service(`localabstract:${socket_name}`)
 	} catch(e) {
@@ -121,40 +117,55 @@ class AdbSmartSocketClient {
 	}
 
 	async connect(port = 5037, host = 'localhost') {
-		this.sock = net.connect(port, host)
+		return new Promise((resolve, reject) => {
+			this.sock = net.connect(port, host)
 
-		this.receivedData = Buffer.alloc(0)
-		this.sock.on('data', (data) => {
-			if (Buffer.isBuffer(data)) {
-				this.receivedData = Buffer.concat([this.receivedData, data])
-			} else if (typeof data === 'string') {
-				this.receivedData = Buffer.concat([this.receivedData, Buffer.from(data)])
-			}
+			this.receivedData = Buffer.alloc(0)
+
+			this.sock.on('ready', () => {
+				console.log('Socket is READY')
+				resolve()
+			})
+			this.sock.on('error', (e) => {
+				reject(e)
+			})
+			this.sock.on('timeout', () => {
+				reject(new Error(`Timeout when connecting to ${host}:${port}`))
+			})
+			this.sock.on('data', (data) => {
+				// console.log('Received data:', data)
+				if (Buffer.isBuffer(data)) {
+					this.receivedData = Buffer.concat([this.receivedData, data])
+				} else if (typeof data === 'string') {
+					this.receivedData = Buffer.concat([this.receivedData, Buffer.from(data)])
+				}
+			})
 		})
 	}
 
-	async write(data) {
+	write(data) {
 		return new Promise(resolve => {
 			this.sock.write(data, resolve)
 		})
 	}
 
-	async read_input(n, tag) {
+	read_input(n, tag) {
+		console.log('read_input', tag)
 		return new Promise(async (resolve, reject) => {
 			const start = new Date()
 			// check each tick until we have received enough data
 			while (this.receivedData.length < n) {
 				const elapsed = new Date() - start
 				if (elapsed >= READ_TIMEOUT) {
-					reject(new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`))
+					// reject(new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`))
 				}
-				await nextTick()
+				await next()
 			}
 
 			// remove the asked length from our buffer and return it
 			const consumed = this.receivedData.slice(0, n)
 			this.receivedData = this.receivedData.slice(n)
-			resolve(consumed)
+			resolve(consumed.toString())
 		})
 	}
 
@@ -163,28 +174,11 @@ class AdbSmartSocketClient {
 	}
 
 	async select_service(service) {
-		// // select service
-		// const serviceLengthAsHexString = pad(service.length.toString(16), 4, '0')
-		// const msg1 = serviceLengthAsHexString + service
-		// // s.write(Buffer.from(msg1, 'ascii').toString('ascii'))
-		// s.write(msg1)
-
-		// const status = await readInput(s, 4, "status")
-		// if(status === "OKAY") {
-		// 	// all good
-		// } else if (status === "FAIL") {
-		// 	const reasonLength = parseInt(await readInput(s, 4, "fail_reason"), 16)
-		// 	const reason = await readInput(s, reasonLength, "fail reason lean")
-		// 	throw new Error(reason)
-		// } else {
-		// 	throw new Error(`Unrecognized status=${status}`)
-		// }
-
 		console.log('select_service:', service)
-		console.log('select_service:', service.length)
 		const message = `${padLeft(service.length.toString(16), 4, '0')}${service}` // TODO: check this is correct
-		await this.write(Buffer.from(message, 'ascii').toString('ascii')) // TODO: chelou
-		console.log('hop')
+		// await this.write(Buffer.from(message, 'ascii')) // TODO: chelou
+		await this.write(message)
+		console.log('finished writting message', message)
 
 		const status = await this.read_input(4, 'status')
 		console.log('status:', status)

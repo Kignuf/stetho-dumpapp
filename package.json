@@ -13,7 +13,6 @@
   "author": "Kevin Roulleau",
   "license": "ISC",
   "dependencies": {
-    "netlinkwrapper": "^1.1.2",
     "pad-left": "^2.1.0",
     "python-struct": "^1.0.8"
   }

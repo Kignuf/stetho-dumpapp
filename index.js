@@ -55,7 +55,9 @@ async function main() {
 	// === get commands list ===
 
 	// send "DUMP" message to socket
-	s.write(Buffer.from('DUMP\x00\x00\x00\x01'))
+	// s.write(Buffer.from('DUMP\x00\x00\x00\x01')) // VERSION QUI MARCHE
+	s.write(buildMsg('DUMP', struct.pack('!L', 1)))
+
 	// const dump = Buffer.from('DUMP')
 	// const size = struct.pack('!l', 1)
 	// s.write(Buffer.concat([dump, size], dump.length + size.length))
@@ -106,3 +108,8 @@ try {
 // s.write(msg)
 
 // console.log(Buffer.concat([dump, size], dump.length + size.length))
+
+function buildMsg(msg, size) {
+	const msgDump = Buffer.from(msg)
+	return Buffer.concat([msgDump, size], msgDump.length + size.length).toString()
+}

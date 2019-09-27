@@ -138,7 +138,7 @@ class AdbSmartSocketClient {
 		})
 	}
 
-	async read_input(n, tag) {
+	async read_input(n, tag, shouldStringify = true) {
 		const start = new Date()
 		// check each tick until we have received enough data
 		while (this.receivedData.length < n) {
@@ -152,7 +152,10 @@ class AdbSmartSocketClient {
 		// remove the asked length from our buffer and return it
 		const consumed = this.receivedData.slice(0, n)
 		this.receivedData = this.receivedData.slice(n)
-		return consumed.toString()
+		if (shouldStringify){
+			return consumed.toString()
+		}
+		return consumed
 	}
 
 	close(){

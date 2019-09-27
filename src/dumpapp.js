@@ -61,7 +61,7 @@ async function read_frames(adb) {
 	while(doing) {
 		// All frames have a single character code followed by a big-endian int
 		const code = await adb.read_input(1, 'code')
-		const data = await adb.read_input(4, 'int4')
+		const data = await adb.read_input(4, 'int4', false)
 		const n = struct.unpack('!L', Buffer.from(data))[0]
 
 		if (code === '1') {

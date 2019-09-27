@@ -35,7 +35,7 @@ const net = require('net')
 
 async function main() {
 	const s = net.connect(5037, 'localhost')
-	const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+	// const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 	s.on('data', (data) => {
 		console.log('COUCOU', data)
 	})

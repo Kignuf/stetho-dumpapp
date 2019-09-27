@@ -42,6 +42,7 @@ async function main() {
 				arg
 			)
 		})
+		console.log(enter_frame)
 		await adb.write(enter_frame)
 		await read_frames(adb)
 	} catch(e) {

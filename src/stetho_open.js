@@ -1,6 +1,7 @@
 const net = require('net')
 const next = () => new Promise(resolve => setImmediate(resolve))
 const padLeft = require('pad-left')
+const logger = require('./logger')
 
 const READ_TIMEOUT = 10 * 1000
 // ###############################################################################
@@ -70,7 +71,7 @@ async function _find_only_stetho_socket(device) {
 			return last_stetho_socket_name
 		}
 	} catch(e) {
-		throw e
+		logger.error(e)
 	} finally {
 		adb.close()
 	}
@@ -94,7 +95,7 @@ async function _connect_to_device(device) {
 }
 
 function _parse_process_from_stetho_socket(socket_name) {
-	const m = socket_name.match(/^\@stetho_(.+)_devtools_remote$/) // TODO: cross fingers and hope it works !
+	const m = socket_name.match(/^@stetho_(.+)_devtools_remote$/) // TODO: cross fingers and hope it works !
 	if(!m) {
 		throw new Error(`Unexpected Stetho socket formatting: ${socket_name}`)
 	}
@@ -137,23 +138,21 @@ class AdbSmartSocketClient {
 		})
 	}
 
-	read_input(n, tag) {
-		return new Promise(async (resolve, reject) => {
-			const start = new Date()
-			// check each tick until we have received enough data
-			while (this.receivedData.length < n) {
-				const elapsed = new Date() - start
-				if (elapsed >= READ_TIMEOUT) {
-					reject(new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`))
-				}
-				await next()
+	async read_input(n, tag) {
+		const start = new Date()
+		// check each tick until we have received enough data
+		while (this.receivedData.length < n) {
+			const elapsed = new Date() - start
+			if (elapsed >= READ_TIMEOUT) {
+				throw new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`)
 			}
+			await next()
+		}
 
-			// remove the asked length from our buffer and return it
-			const consumed = this.receivedData.slice(0, n)
-			this.receivedData = this.receivedData.slice(n)
-			resolve(consumed.toString())
-		})
+		// remove the asked length from our buffer and return it
+		const consumed = this.receivedData.slice(0, n)
+		this.receivedData = this.receivedData.slice(n)
+		return consumed.toString()
 	}
 
 	close(){

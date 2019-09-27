@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ."
   },
   "keywords": [
     "node",
@@ -15,5 +16,8 @@
   "dependencies": {
     "pad-left": "^2.1.0",
     "python-struct": "^1.0.8"
+  },
+  "devDependencies": {
+    "eslint": "^6.4.0"
   }
 }

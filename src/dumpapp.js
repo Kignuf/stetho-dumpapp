@@ -21,7 +21,7 @@ async function main() {
 			die('Missing <process>', 1)
 		} else {
 			stetho_process = args[1]
-			args = args.slice(2, args.length)
+			args = args.slice(2)
 		}
 	}
 
@@ -43,7 +43,6 @@ async function main() {
 				arg
 			)
 		})
-		console.log(enter_frame)
 		await adb.write(enter_frame)
 		await read_frames(adb)
 	} catch(e) {
@@ -51,9 +50,9 @@ async function main() {
 	}
 }
 
-function buildMsg(msg, size) {
+function buildMsg(msg, struct) {
 	const msgDump = Buffer.from(msg)
-	return Buffer.concat([msgDump, size], msgDump.length + size.length).toString()
+	return Buffer.concat([msgDump, struct], msgDump.length + struct.length).toString()
 }
 
 async function read_frames(adb) {

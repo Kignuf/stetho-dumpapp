@@ -1,5 +1,5 @@
 const DEBUG = process.env['DEBUG']
-const LOGGING_ENABLED = DEBUG === '*' || DEBUG === 'stetho-node'
+const LOGGING_ENABLED = DEBUG === '*' || DEBUG === 'stetho-dumpapp'
 module.exports = {
 	log: (...args) => {
 		if(LOGGING_ENABLED){

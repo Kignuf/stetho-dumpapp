@@ -1,8 +1,9 @@
 const struct = require('python-struct')
 const {stetho_open} = require('./stetho_open')
+const logger = require('./logger')
 
 function die(msg, code) {
-	console.error(msg)
+	logger.error(msg)
 	process.exit(code)
 }
 
@@ -56,7 +57,8 @@ function buildMsg(msg, size) {
 }
 
 async function read_frames(adb) {
-	while(true) {
+	let doing = true
+	while(doing) {
 		// All frames have a single character code followed by a big-endian int
 		const code = await adb.read_input(1, 'code')
 		const data = await adb.read_input(4, 'int4')
@@ -83,12 +85,12 @@ async function read_frames(adb) {
 				throw new Error('Not implemented')
 			}
 		} else if (code === 'x') {
-			process.exit(0)
+			doing = false
 		} else {
-			console.log('terminé')
-			return
+			doing = false
 		}
 	}
+	process.exit(0)
 }
 
 main()

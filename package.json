@@ -1,5 +1,5 @@
 {
-  "name": "stetho-node",
+  "name": "stetho-dumpapp",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -9,7 +9,8 @@
   },
   "keywords": [
     "node",
-    "stetho"
+    "stetho",
+    "dumpapp"
   ],
   "author": "Kevin Roulleau",
   "license": "ISC",

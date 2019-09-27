@@ -138,7 +138,7 @@ class AdbSmartSocketClient {
 		})
 	}
 
-	async read_input(n, tag, shouldStringify = true) {
+	async read_input(n, tag, encoding = 'utf-8') {
 		const start = new Date()
 		// check each tick until we have received enough data
 		while (this.receivedData.length < n) {
@@ -152,8 +152,8 @@ class AdbSmartSocketClient {
 		// remove the asked length from our buffer and return it
 		const consumed = this.receivedData.slice(0, n)
 		this.receivedData = this.receivedData.slice(n)
-		if (shouldStringify){
-			return consumed.toString()
+		if (encoding){
+			return consumed.toString(encoding)
 		}
 		return consumed
 	}
@@ -173,7 +173,7 @@ class AdbSmartSocketClient {
 			return
 		} else if (status === 'FAIL') {
 			const reason_len = parseInt(await this.read_input(4, 'fail reason'), 16)
-			const reason = (await this.read_input(reason_len, 'fail reason lean')).toString('ascii') // TODO: vérifier la conversion ascii
+			const reason = await this.read_input(reason_len, 'fail reason lean', 'ascii')
 			throw new Error(reason)
 		} else {
 			throw new Error(`Unrecognized status= ${status}`)

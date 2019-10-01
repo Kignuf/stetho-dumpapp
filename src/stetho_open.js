@@ -41,29 +41,33 @@ async function _find_only_stetho_socket(device) {
 	const adb = await _connect_to_device(device)
 	try {
 		await adb.select_service('shell:cat /proc/net/unix')
+		const sockets = await adb.read_input(0, 'services')
 		let last_stetho_socket_name = null
 		const process_names = []
-		adb.sock.makeFile().forEach(line => { // TODO check this
-			let row = line.trimEnd().split(' ')
-			if (row.length < 8) {
-				return
-			}
-			const socket_name = row[7]
-			if (!socket_name.startsWith('@stetho_')) {
-				return
-			}
-			// Filter out entries that are not server sockets
-			if (Number(row[3]) !== 65536 || Number(row[5]) !== 1) {
-				return
-			}
 
-			last_stetho_socket_name = socket_name.slice(1)
-			process_names.push(_parse_process_from_stetho_socket(socket_name))
-		})
+		sockets.split('\n')
+			.slice(1) // remove header
+			.forEach(line => { // TODO check this
+				let row = line.trimRight().split(' ')
+				if (row.length < 8) {
+					return
+				}
+				const socket_name = row[7]
+				if (!socket_name.startsWith('@stetho_')) {
+					return
+				}
+				// Filter out entries that are not server sockets
+				if (Number(row[3]) !== 10000 || Number(row[5]) !== 1) {
+					return
+				}
 
-		if(process_names.length > 1) {
+				last_stetho_socket_name = socket_name.slice(1)
+				process_names.push(_parse_process_from_stetho_socket(socket_name))
+			})
+
+		if (process_names.length > 1) {
 			let msg = `\n\t${process_names}`
-			msg += 'Use -p <process> or the environment variable STETHO_PROCESS to select one'
+			msg += 'Please provide a process name'
 			throw new Error(`Multiple stetho-enabled processes available:${msg}\n`)
 		} else if (!last_stetho_socket_name) {
 			throw new Error('No stetho-enabled processes running')
@@ -139,19 +143,33 @@ class AdbSmartSocketClient {
 	}
 
 	async read_input(n, tag, encoding = 'utf-8') {
-		const start = new Date()
-		// check each tick until we have received enough data
-		while (this.receivedData.length < n) {
-			const elapsed = new Date() - start
-			if (elapsed >= READ_TIMEOUT) {
-				throw new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`)
+		let consumed
+		// handle when we don't know how much data will be sent
+		// which occurs when we select service shell: cat /proc/net/unix
+		// unfortunately we don't know when all data has been received, so
+		// this is a timed base algorithm
+		const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+		if (n === 0) {
+			await sleep(200)
+			const consumed = this.receivedData
+			this.receivedData = Buffer.alloc(0)
+			return consumed.toString(encoding)
+		} else {
+			const start = new Date()
+			// check each tick until we have received enough data
+			while (this.receivedData.length < n) {
+				const elapsed = new Date() - start
+				if (elapsed >= READ_TIMEOUT) {
+					throw new Error(`Failed reading ${tag}. Expected ${n} bytes from buffer, waited ${READ_TIMEOUT}ms and only had ${this.receivedData.length} bytes in store`)
+				}
+				await next()
 			}
-			await next()
+
+			// remove the asked length from our buffer and return it
+			consumed = this.receivedData.slice(0, n)
+			this.receivedData = this.receivedData.slice(n)
 		}
 
-		// remove the asked length from our buffer and return it
-		const consumed = this.receivedData.slice(0, n)
-		this.receivedData = this.receivedData.slice(n)
 		if (encoding){
 			return consumed.toString(encoding)
 		}

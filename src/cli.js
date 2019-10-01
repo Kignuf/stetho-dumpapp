@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 const struct = require('python-struct')
 const {stetho_open} = require('./stetho_open')
 const logger = require('./logger')
@@ -61,7 +62,7 @@ async function read_frames(adb) {
 		// All frames have a single character code followed by a big-endian int
 		const code = await adb.read_input(1, 'code')
 		const data = await adb.read_input(4, 'int4', false)
-		const n = struct.unpack('!L', Buffer.from(data))[0]
+		const n = struct.unpack('!L', data)[0]
 
 		if (code === '1') {
 			if (n > 0) {

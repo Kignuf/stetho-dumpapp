@@ -23,3 +23,5 @@ rules:
     - never
   no-constant-condition:
     - off
+  no-unused-vars:
+    - warn

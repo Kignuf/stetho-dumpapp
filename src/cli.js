@@ -2,6 +2,7 @@
 const struct = require('python-struct')
 const {stetho_open} = require('./stetho_open')
 const logger = require('./logger')
+const {buildMsg, read_frame} = require('./utils')
 
 function die(msg, code) {
 	logger.error(msg)
@@ -51,44 +52,18 @@ async function main() {
 	}
 }
 
-function buildMsg(msg, struct) {
-	const msgDump = Buffer.from(msg)
-	return Buffer.concat([msgDump, struct], msgDump.length + struct.length).toString()
-}
-
 async function read_frames(adb) {
 	let doing = true
-	while(doing) {
-		// All frames have a single character code followed by a big-endian int
-		const code = await adb.read_input(1, 'code')
-		const data = await adb.read_input(4, 'int4', false)
-		const n = struct.unpack('!L', data)[0]
+	while (doing) {
+		const result = await read_frame(adb)
 
-		if (code === '1') {
-			if (n > 0) {
-				console.log(await adb.read_input(n, 'stdout blob'))
-			}
-		} else if (code === '2') {
-			if (n > 0) {
-				console.error(await adb.read_input(n, 'stderr blob'))
-			}
-		} else if (code === '_') {
-			if (n > 0) {
-				// TODO: user should provide info, see python implementation below for reference
-				// BEGIN Python excerpt
-				// data = sys.stdin.buffer.read(n)
-				// if len(data) == 0:
-				// sock.send(b'-' + struct.pack('!L', -1))
-				// else:
-				// sock.send(b'-' + struct.pack('!L', len(data)) + data)
-				// END Python excerpt
-				throw new Error('Not implemented')
-			}
-		} else if (code === 'x') {
-			doing = false
-		} else {
-			doing = false
+		if (result.stdout) {
+			console.log(result.stdout)
 		}
+		if (result.stderr) {
+			console.error(result.stderr)
+		}
+		doing = !result.end
 	}
 	process.exit(0)
 }
